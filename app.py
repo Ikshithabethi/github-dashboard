@@ -2,228 +2,175 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import networkx as nx
-import plotly.graph_objects as go
-import numpy as np
-import random
+import matplotlib.pyplot as plt
 
-# ---------------------------
+# -----------------------------
 # PAGE CONFIG
-# ---------------------------
-st.set_page_config(page_title="GitHub Analytics Dashboard", layout="wide")
-
-st.title("🚀 GitHub Collaboration & Health Dashboard")
-
-# ---------------------------
-# LOAD DATA
-# ---------------------------
-df = pd.read_csv("github_100_repos.csv")
-
-# ---------------------------
-# HANDLE MISSING VALUES
-# ---------------------------
-df = df.fillna(0)
-
-# ---------------------------
-# FEATURE ENGINEERING
-# ---------------------------
-df["issue_resolution_rate"] = df["closed_issues"] / (df["open_issues"] + df["closed_issues"] + 1)
-df["commit_efficiency"] = df["commits"] / (df["contributors"] + 1)
-
-# ---------------------------
-# HEALTH SCORE (IMPROVED)
-# ---------------------------
-df["health_score"] = (
-    0.25 * (df["commit_efficiency"] / df["commit_efficiency"].max()) +
-    0.25 * df["issue_resolution_rate"] +
-    0.25 * df["pr_merge_rate"] +
-    0.25 * (df["contributors"] / df["contributors"].max())
+# -----------------------------
+st.set_page_config(
+    page_title="GitHub Project Health Dashboard",
+    page_icon="🚀",
+    layout="wide"
 )
 
-# ---------------------------
-# SIDEBAR FILTERS
-# ---------------------------
-st.sidebar.header("🔍 Filters")
+# -----------------------------
+# CUSTOM CSS (Aesthetic UI)
+# -----------------------------
+st.markdown("""
+<style>
+.metric-card {
+    background-color: #0f172a;
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    color: white;
+    box-shadow: 0px 4px 12px rgba(0,0,0,0.3);
+}
 
-selected_repo = st.sidebar.selectbox("Select Repository", df["repo"])
+.metric-title {
+    font-size: 18px;
+    color: #94a3b8;
+}
 
-min_commits = st.sidebar.slider("Minimum Commits", 0, int(df["commits"].max()), 0)
+.metric-value {
+    font-size: 28px;
+    font-weight: bold;
+}
 
-filtered_df = df[df["commits"] >= min_commits]
+.dashboard-title {
+    text-align:center;
+    font-size:40px;
+    font-weight:bold;
+}
 
-row = df[df["repo"] == selected_repo].iloc[0]
+.section-title {
+    font-size:24px;
+    margin-top:30px;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# ---------------------------
-# KPI CARDS
-# ---------------------------
-st.subheader("📊 Key Metrics")
+# -----------------------------
+# LOAD DATA
+# -----------------------------
+df = pd.read_csv("github_100_repos.csv")
+
+# -----------------------------
+# HEADER
+# -----------------------------
+st.markdown("<div class='dashboard-title'>🚀 GitHub Project Health Dashboard</div>", unsafe_allow_html=True)
+st.write("Monitor repository health, contribution activity, and collaboration insights.")
+
+st.divider()
+
+# -----------------------------
+# SIDEBAR
+# -----------------------------
+st.sidebar.title("🔎 Repository Filter")
+repo = st.sidebar.selectbox("Select Repository", df["repo"])
+
+row = df[df["repo"] == repo].iloc[0]
+
+# -----------------------------
+# KPI METRICS
+# -----------------------------
+st.markdown("<div class='section-title'>📊 Repository Metrics</div>", unsafe_allow_html=True)
 
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("⭐ Stars", int(row["stars"]))
-col2.metric("👥 Contributors", int(row["contributors"]))
-col3.metric("📦 Commits", int(row["commits"]))
-col4.metric("🔀 PR Merge Rate", round(row["pr_merge_rate"], 2))
+col1.metric("⭐ Stars", row["stars"])
+col2.metric("👥 Contributors", row["contributors"])
+col3.metric("📦 Commits", row["commits"])
+col4.metric("🔀 PR Merge Rate", f"{row['pr_merge_rate']:.2f}")
 
-# ---------------------------
-# HEALTH SCORE DISPLAY
-# ---------------------------
-st.subheader("💚 Health Score")
+# -----------------------------
+# HEALTH SCORE
+# -----------------------------
+st.markdown("<div class='section-title'>💚 Health Score</div>", unsafe_allow_html=True)
 
 score = row["health_score"]
 
+progress = int(score * 100)
+st.progress(progress)
+
 if score > 0.7:
-    st.success(f"{score*100:.2f}% → Healthy ✅")
+    st.success(f"Repository Health: {progress}% — Healthy 🚀")
 elif score > 0.4:
-    st.warning(f"{score*100:.2f}% → Moderate ⚠️")
+    st.warning(f"Repository Health: {progress}% — Moderate ⚠️")
 else:
-    st.error(f"{score*100:.2f}% → Poor ❌")
+    st.error(f"Repository Health: {progress}% — Poor ❌")
 
-# ---------------------------
-# TOP REPOSITORIES
-# ---------------------------
-st.subheader("🏆 Top 10 Healthy Repositories")
+# -----------------------------
+# CHARTS SECTION
+# -----------------------------
+st.markdown("<div class='section-title'>📈 Repository Insights</div>", unsafe_allow_html=True)
 
-top10 = filtered_df.sort_values("health_score", ascending=False).head(10)
+col1, col2 = st.columns(2)
 
-fig1 = px.bar(
-    top10,
-    x="repo",
-    y="health_score",
-    color="health_score",
-    title="Top Performing Repositories"
-)
+# Top repositories
+with col1:
 
-st.plotly_chart(fig1, use_container_width=True)
+    top10 = df.sort_values("health_score", ascending=False).head(10)
 
-# ---------------------------
-# SCATTER PLOT
-# ---------------------------
-st.subheader("📈 Contributors vs Commits")
+    fig = px.bar(
+        top10,
+        x="repo",
+        y="health_score",
+        color="health_score",
+        title="Top 10 Healthy Repositories",
+        color_continuous_scale="viridis"
+    )
 
-fig2 = px.scatter(
-    filtered_df,
-    x="contributors",
-    y="commits",
-    size="health_score",
-    color="health_score",
-    hover_name="repo",
-    title="Collaboration Analysis"
-)
+    fig.update_layout(xaxis_tickangle=-45)
 
-st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-# ---------------------------
-# TIME TREND (SIMULATED)
-# ---------------------------
-st.subheader("📅 Activity Trend")
+# Scatter plot
+with col2:
 
-df["activity_trend"] = np.random.randint(50, 200, size=len(df))
+    fig2 = px.scatter(
+        df,
+        x="contributors",
+        y="commits",
+        size="health_score",
+        color="health_score",
+        hover_name="repo",
+        title="Contributors vs Commits",
+        color_continuous_scale="plasma"
+    )
 
-fig3 = px.line(
-    df.head(10),
-    x="repo",
-    y="activity_trend",
-    title="Repository Activity Trend"
-)
+    st.plotly_chart(fig2, use_container_width=True)
 
-st.plotly_chart(fig3, use_container_width=True)
-
-# ---------------------------
-# CONTRIBUTOR ANALYSIS
-# ---------------------------
-st.subheader("👥 Contributor Analysis")
-
-top_contributors = df.sort_values("contributors", ascending=False).head(10)
-
-fig4 = px.bar(
-    top_contributors,
-    x="repo",
-    y="contributors",
-    title="Top Contributor-heavy Repositories"
-)
-
-st.plotly_chart(fig4, use_container_width=True)
-
-# ---------------------------
-# CORRELATION HEATMAP
-# ---------------------------
-st.subheader("📊 Correlation Heatmap")
-
-corr = df[["commits", "contributors", "pr_merge_rate", "health_score"]].corr()
-
-fig5 = px.imshow(corr, text_auto=True, title="Feature Correlation")
-
-st.plotly_chart(fig5, use_container_width=True)
-
-# ---------------------------
-# REALISTIC NETWORK GRAPH
-# ---------------------------
-st.subheader("🌐 Collaboration Network")
+# -----------------------------
+# NETWORK GRAPH
+# -----------------------------
+st.markdown("<div class='section-title'>🌐 Collaboration Network</div>", unsafe_allow_html=True)
 
 G = nx.Graph()
 
-contributors = [f"Dev{i}" for i in range(10)]
+for i in range(min(20, len(df))):
+    G.add_node(df["repo"][i])
+    if i > 0:
+        G.add_edge(df["repo"][i-1], df["repo"][i])
 
-for repo in df["repo"].head(10):
-    assigned = random.sample(contributors, k=3)
-    for dev in assigned:
-        G.add_node(dev)
-        G.add_node(repo)
-        G.add_edge(dev, repo)
+plt.figure(figsize=(10,6))
+pos = nx.spring_layout(G)
 
-pos = nx.spring_layout(G, seed=42)
+nx.draw(
+    G, pos,
+    with_labels=True,
+    node_size=1500,
+    node_color="#6366f1",
+    font_size=8,
+    font_color="white",
+    edge_color="gray"
+)
 
-edge_x, edge_y = [], []
-for edge in G.edges():
-    x0, y0 = pos[edge[0]]
-    x1, y1 = pos[edge[1]]
-    edge_x += [x0, x1, None]
-    edge_y += [y0, y1, None]
+st.pyplot(plt)
 
-node_x, node_y = [], []
-for node in G.nodes():
-    x, y = pos[node]
-    node_x.append(x)
-    node_y.append(y)
+# -----------------------------
+# DATASET PREVIEW
+# -----------------------------
+st.markdown("<div class='section-title'>📄 Repository Dataset</div>", unsafe_allow_html=True)
 
-fig6 = go.Figure()
-
-fig6.add_trace(go.Scatter(
-    x=edge_x, y=edge_y,
-    mode='lines',
-    line=dict(width=1, color='gray'),
-    hoverinfo='none'
-))
-
-fig6.add_trace(go.Scatter(
-    x=node_x, y=node_y,
-    mode='markers+text',
-    text=list(G.nodes()),
-    textposition="top center",
-    marker=dict(size=12, color='skyblue')
-))
-
-fig6.update_layout(showlegend=False)
-
-st.plotly_chart(fig6, use_container_width=True)
-
-# ---------------------------
-# INSIGHTS
-# ---------------------------
-st.subheader("💡 Insights")
-
-high = df[df["health_score"] > 0.7]
-low = df[df["health_score"] < 0.4]
-
-st.write(f"✅ Healthy Projects: {len(high)}")
-st.write(f"⚠️ Moderate Projects: {len(df) - len(high) - len(low)}")
-st.write(f"❌ Poor Projects: {len(low)}")
-
-st.write(f"🔥 Best Repo: {df.loc[df['health_score'].idxmax(), 'repo']}")
-st.write(f"📉 Weakest Repo: {df.loc[df['health_score'].idxmin(), 'repo']}")
-
-# ---------------------------
-# DATA TABLE
-# ---------------------------
-st.subheader("📄 Dataset")
-st.dataframe(df)
+st.dataframe(df, use_container_width=True)
